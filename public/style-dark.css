@@ -1,0 +1,88 @@
+/* Tema Oscuro Clásico (Q3 Default) */
+body {
+    background: #1a1a1a;
+    color: #e2e2e2;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+}
+
+.rainbow-text {
+    position: relative;
+    top: 5%;
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #ff4500;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
+    margin-bottom: 20px;
+}
+
+.ocean { display: none; } /* Deshabilitar olas en el tema oscuro */
+
+.card {
+    background: #2a2a2a;
+    border: 2px solid #ff4500;
+    border-radius: 10px;
+    padding: 20px;
+    width: 450px;
+    margin: 20px auto;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+select, input, button {
+    width: 90%;
+    padding: 10px;
+    margin: 8px 0;
+    background: #333;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 5px;
+}
+
+button {
+    background: #ff4500;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    transition: 0.3s;
+}
+
+button:hover {
+    background: #ff6347;
+    transform: scale(1.02);
+}
+
+.btn-kill {
+    background: #990000;
+    margin-top: 10px;
+}
+
+#status {
+    color: #00ff00;
+    margin: 15px 0;
+    font-size: 0.9em;
+    height: 20px;
+}
+
+#console-box {
+    background: #000;
+    color: #33ff33;
+    height: 350px;
+    width: 90%;
+    max-width: 800px;
+    overflow-y: auto;
+    margin: 20px auto;
+    padding: 15px;
+    text-align: left;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85em;
+    border: 2px solid #333;
+    border-radius: 5px;
+    box-shadow: inset 0 0 15px #000;
+}
+
+.log-line {
+    border-bottom: 1px solid #111;
+    padding: 2px 0;
+    line-height: 1.4;
+}

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Meg & Yim Q3 Hub</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link id="theme-style" rel="stylesheet" href="/style-dark.css">
+    <style>
+        /* Estructura Base Layout Lado a Lado (Para todos los temas) */
+        .panels-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            gap: 20px;
+            max-width: 1050px;
+            margin: 20px auto;
+            flex-wrap: wrap;
+            /* En celulares se ponen uno arriba de otro */
+        }
+
+        .card {
+            margin: 0 !important;
+            /* Pisamos el margin auto de los archivos de tema */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-card {
+            justify-content: center;
+            align-items: center;
+            width: 480px;
+            /* Igual o parecido al otro card */
+        }
+
+        #mapPreview {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            border-radius: 5px;
+            object-fit: contain;
+            display: none;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #mapInfoTitle {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 1.2em;
+            text-shadow: 2px 2px 5px #000;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <!-- El título con efecto TODO: aplicar style.css ver como queda si es mejor,  -->
+        <h1 class="rainbow-text">MEG & YIM Q3A Server Launcher</h1>
+
+        <!-- Las ondas animadas -->
+        <div class="ocean">
+            <div class="wave"></div>
+            <div class="wave"></div>
+        </div>
+    </div>
+
+    <div class="panels-wrapper">
+        <div class="card">
+            <label>TEMA VISUAL:</label>
+            <select id="themeSelector" onchange="changeTheme()">
+                <option value="style-dark.css">Dark Theme (Q3 Default)</option>
+                <option value="style-ocean.css">Ocean Theme (Animado)</option>
+                <option value="style-retro.css">Matrix / Retro Terminal</option>
+            </select>
+
+            <label>MOD:</label>
+            <select id="mod">
+                <option value="cpma">CPMA</option> <!-- challenge pro mode arena-->
+                <option value="missionpack">Team Arena</option> <!-- q3a oficial mod team arena -->
+                <option value="osp">OSP</option> <!-- osp orange smothie-->
+                <option value="arena">RA3</option> <!-- rocket arena 3-->
+                <option value="alliance">Alliance CTF</option> <!-- Alliance CTF full -->
+                <option value="DeFRaG">DeFRaG</option> <!-- DeFRaG mod de velocidad strafe jump-->
+                <option value="excessiveplus">Excessive+</option>
+                <!-- Excesive Plus muy modificable ejemplo bfg rapida como plasma-->
+                <option value="invacion">Marines vs Aliens</option> <!-- Marines vs Aliens full -->
+            </select>
+
+            <label>MODO DE JUEGO:</label>
+            <select id="mode">
+                <option value="1v1">1v1 Tournament</option>
+                <option value="ffa">Free For All</option>
+                <option value="tdm">Team Deathmatch</option>
+                <option value="ctf">Capture the Flag</option>
+                <option value="ca">Clan Arena</option>
+                <option value="ftag">Freeze Tag</option>
+                <option value="ctfs">Strike CTF</option>
+                <option value="ra">Rocket Arena</option>
+            </select>
+
+            <label>GAMEPLAY (CPMA):</label>
+            <select id="gameplay">
+                <option value="cpm">CPM (Modern)</option>
+                <option value="pmc">PMC (Classic)</option>
+                <option value="cq3">Challenge Q3</option>
+                <option value="vq3">Vanilla Q3</option>
+            </select>
+
+            <label>MAPA:</label>
+            <input type="text" id="mapName" list="mapList" value="aerowalk" placeholder="Escribe o selecciona..."
+                onkeyup="checkMapPreview()" onchange="checkMapPreview()">
+            <datalist id="mapList"></datalist>
+
+            <button onclick="launch()">LANZAR SERVIDOR</button>
+            <div id="status">SISTEMA LISTO</div>
+            <button class="btn-kill" onclick="killAll()">⚠️ ANIQUILAR TODO</button>
+        </div>
+
+        <div class="card preview-card">
+            <img id="mapPreview" src="" alt="preview" title="Vista previa del mapa">
+            <div id="mapInfoTitle">Esperando mapa...</div>
+        </div>
+    </div>
+
+    <h2>🛰️ RADAR DE COMBATE EN VIVO</h2>
+    <div id="console-box">
+        <div>[SISTEMA] Esperando actividad de los servidores...</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // --- SISTEMA DEFINICIÓN Y VISTA PREVIA DE MAPAS ---
+        let mapsDB = {};
+
+        // Cargar db de mapas al entrar
+        fetch('/api/maps')
+            .then(res => res.json())
+            .then(data => {
+                mapsDB = data;
+                populateMapDatalist();
+                checkMapPreview(); // Chequear el valor por defecto
+            })
+            .catch(e => console.error("Error cargando mapas", e));
+
+        function populateMapDatalist() {
+            const datalist = document.getElementById('mapList');
+            datalist.innerHTML = ''; // Limpiar opciones previas
+
+            // Recorrer los mapas guardados en DB y llenar la lista desplegable
+            Object.values(mapsDB).forEach(mapInfo => {
+                const opt = document.createElement('option');
+                opt.value = mapInfo.bsp;
+                opt.textContent = `${mapInfo.longname} (${mapInfo.type})`;
+                datalist.appendChild(opt);
+            });
+        }
+
+        function checkMapPreview() {
+            const mapInput = document.getElementById('mapName').value.trim().toLowerCase();
+            const previewImg = document.getElementById('mapPreview');
+            const infoTitle = document.getElementById('mapInfoTitle');
+
+            if (mapsDB[mapInput] && mapsDB[mapInput].levelshot) {
+                previewImg.src = mapsDB[mapInput].levelshot;
+                previewImg.style.display = 'block';
+                infoTitle.innerText = `${mapsDB[mapInput].longname || mapInput} (${mapsDB[mapInput].type})`;
+                infoTitle.style.display = 'block';
+            } else {
+                previewImg.style.display = 'none';
+                infoTitle.innerText = 'Esperando o buscando mapa...';
+                infoTitle.style.display = 'block';
+            }
+        }
+
+        // --- SISTEMA DE TEMAS ---
+        function changeTheme() {
+            const selectedTheme = document.getElementById('themeSelector').value;
+            document.getElementById('theme-style').href = '/' + selectedTheme;
+            localStorage.setItem('megyim_q3_theme', selectedTheme);
+        }
+
+        // Cargar tema guardado al iniciar
+        window.onload = () => {
+            const savedTheme = localStorage.getItem('megyim_q3_theme');
+            if (savedTheme) {
+                document.getElementById('themeSelector').value = savedTheme;
+                document.getElementById('theme-style').href = '/' + savedTheme;
+            }
+        };
+
+        function launch() {
+            const data = {
+                mod: document.getElementById('mod').value,
+                mode: document.getElementById('mode').value,
+                gameplay: document.getElementById('gameplay').value,
+                mapName: document.getElementById('mapName').value
+            };
+            socket.emit('launch', data);
+        }
+
+        function killAll() {
+            if (confirm('¿Aniquilar todos los servidores de Meg & Yim?')) {
+                socket.emit('kill_all');
+                document.getElementById('console-box').innerHTML = '<div>[SISTEMA] Servidores aniquilados.</div>';
+            }
+        }
+
+        socket.on('status', (msg) => {
+            document.getElementById('status').innerText = msg;
+        });
+
+        socket.on('map_search_fallback', (data) => {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `❌ Mapa "${data.mapName}" no encontrado. <br><a href="${data.url}" target="_blank" style="color:#ffcc00; text-decoration:underline; font-weight:bold;">🔎 Buscar "${data.mapName}" en Google</a>`;
+        });
+
+        socket.on('chat_msg', (data) => {
+            const box = document.getElementById('console-box');
+
+            // Eliminamos el filtro 'esInteresante' para ver TODO lo que escupe la consola
+            const line = document.createElement('div');
+            line.className = 'log-line';
+
+            const colors = { 'ctf': '#ff4500', '1v1': '#00d4ff', 'ffa': '#ffcc00', 'ca': '#ff00ff', 'ftag': '#00ff00', 'ctfs': '#ff00ff', 'ra': '#00ffff' };
+            const modeColor = colors[data.mode] || '#eee';
+
+            // Usamos textContent para mayor seguridad, o innerHTML si confías en los datos
+            line.innerHTML = `<span style="color: ${modeColor}">[${data.mode.toUpperCase()}]</span> ${data.text}`;
+
+            box.appendChild(line);
+
+            // Auto-scroll para ver lo último
+            box.scrollTop = box.scrollHeight;
+        });
+
+        socket.on('chat_msg', (data) => {
+            const box = document.getElementById('console-box');
+
+            // Filtro para no llenar la web de basura técnica (opcional)
+            // Solo muestra líneas que tengan ":" (chat) o palabras de combate
+            const text = data.text.toLowerCase();
+            const esInteresante = text.includes(':') || text.includes('fragged') || text.includes('killed') || text.includes('connected');
+
+            if (esInteresante) {
+                const line = document.createElement('div');
+                line.className = 'log-line';
+
+                const colors = { 'ctf': '#ff4500', '1v1': '#00d4ff', 'ffa': '#ffcc00', 'ca': '#ff00ff', 'ftag': '#00ff00', 'ctfs': '#ff00ff', 'ra': '#00ffff' };
+                const modeColor = colors[data.mode] || '#eee';
+
+                line.innerHTML = `<span style="color: ${modeColor}">[${data.mode.toUpperCase()}]</span> ${data.text}`;
+                box.appendChild(line);
+                box.scrollTop = box.scrollHeight;
+            }
+        });
+    </script>
+</body>
+
+</html>

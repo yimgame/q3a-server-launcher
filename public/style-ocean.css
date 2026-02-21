@@ -1,0 +1,197 @@
+/* 1. Fondo con Gradiente Animado */
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    font-family: 'Arial', sans-serif;
+    overflow: hidden;
+    background: linear-gradient(315deg, #1a1a2e, #16213e, #0f3460, #533483);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    color: #e2e2e2;
+    text-align: center;
+}
+
+@keyframes gradientBG {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* 2. Letras que cambian de color (Arco Iris) */
+.rainbow-text {
+    position: relative;
+    top: 5%;
+    /* Ajustado para que encaje con el resto de la UI */
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff);
+    background-size: 400% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainbowShift 5s linear infinite;
+    margin-bottom: 20px;
+    z-index: 10;
+}
+
+@keyframes rainbowShift {
+    to {
+        background-position: 400% center;
+    }
+}
+
+/* 3. Ondas Animadas en el fondo */
+.ocean {
+    height: 15%;
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    background: transparent;
+    z-index: -1;
+    /* Enviar al fondo para que no tape los clicks */
+}
+
+.wave {
+    background: url(https://s3-us-west-2.amazonaws.com) repeat-x;
+    position: absolute;
+    top: -55px;
+    width: 6400px;
+    height: 198px;
+    animation: waveMoving 7s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
+    transform: translate3d(0, 0, 0);
+    opacity: 0.3;
+}
+
+.wave:nth-of-type(2) {
+    top: -45px;
+    animation: waveMoving 7s cubic-bezier(0.36, 0.45, 0.63, 0.53) -0.125s infinite,
+        swell 7s ease -1.25s infinite;
+    opacity: 1;
+}
+
+@keyframes waveMoving {
+    0% {
+        margin-left: 0;
+    }
+
+    100% {
+        margin-left: -1600px;
+    }
+}
+
+@keyframes swell {
+
+    0%,
+    100% {
+        transform: translate3d(0, -25px, 0);
+    }
+
+    50% {
+        transform: translate3d(0, 5px, 0);
+    }
+}
+
+/* --- ELEMENTOS DE LA UI DEL LAUNCHER --- */
+.card {
+    background: rgba(26, 26, 46, 0.85);
+    /* Fondo semi transparente */
+    backdrop-filter: blur(10px);
+    /* Efecto vidrio */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    padding: 20px;
+    width: 450px;
+    margin: 20px auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    position: relative;
+    z-index: 5;
+}
+
+select,
+input,
+button {
+    width: 90%;
+    padding: 10px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    font-family: 'Arial', sans-serif;
+}
+
+select option {
+    background: #1a1a2e;
+    color: white;
+}
+
+button {
+    background: linear-gradient(45deg, #00d2ff 0%, #3a7bd5 100%);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 210, 255, 0.6);
+}
+
+.btn-kill {
+    background: linear-gradient(45deg, #ff416c 0%, #ff4b2b 100%);
+    box-shadow: 0 4px 15px rgba(255, 65, 108, 0.4);
+    margin-top: 10px;
+}
+
+.btn-kill:hover {
+    box-shadow: 0 6px 20px rgba(255, 65, 108, 0.6);
+}
+
+#status {
+    color: #4facfe;
+    margin: 15px 0;
+    font-weight: bold;
+    font-size: 1em;
+    height: 20px;
+    text-shadow: 0 0 10px rgba(79, 172, 254, 0.5);
+}
+
+#console-box {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    color: #e0f7fa;
+    height: 350px;
+    width: 90%;
+    max-width: 800px;
+    overflow-y: auto;
+    margin: 20px auto;
+    padding: 15px;
+    text-align: left;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85em;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+    position: relative;
+    z-index: 5;
+}
+
+.log-line {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 3px 0;
+    line-height: 1.5;
+}
