@@ -4,3 +4,4 @@ maps_db.json
 temp.zip
 .system_generated/
 *.log
+maps.db

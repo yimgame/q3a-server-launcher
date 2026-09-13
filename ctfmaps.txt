@@ -1,0 +1,43 @@
+# the first map will be the one rotated to if the server is idle
+# entries are "mapname [minplayers] [maxplayers] [caplimit] [timelimit]"
+# entries with minplayers -1 are "banned" and can't be voted in even with map_restrict 0
+
+basesiege 02 12 05 05
+beyondreality 02 12 05 05
+bloodlust 02 12 05 05
+campercrossings 02 12 05 05
+citycrossings -1 12 05 05
+coldcathode 02 12 05 05
+courtyard 02 12 05 05
+distantscreams 02 12 05 05
+divineintermiss 02 12 05 05
+doubleimpact 02 12 05 05
+duelingkeeps 02 12 05 05
+falloutbunker 02 12 05 05
+finnegans 02 12 05 05
+fluorescent 02 12 05 05
+futurecrossings 02 12 05 05
+gospelcrossings 02 12 05 05
+industrialaccid 02 12 05 05
+infinity 02 12 05 05
+innersanctums 02 12 05 05
+ironworks 02 12 05 05
+japanesecastles 02 12 05 05
+jumpwerkz 02 12 05 05
+newcerberon 02 12 05 05
+overlord 02 12 05 05
+pillbox 02 12 05 05
+railyard 02 12 05 05
+rebound 02 12 05 05
+reflux 02 12 05 05
+scornforge 02 12 05 05
+shiningforces 02 12 05 05
+siberia 02 12 05 05
+silentnight 02 12 05 05
+skyward 02 12 05 05
+spacectf 02 12 05 05
+spidercrossings 02 12 05 05
+stonekeep 02 12 05 05
+stronghold 02 12 05 05
+troubledwaters 02 12 05 05
+vortexportal 02 12 05 05

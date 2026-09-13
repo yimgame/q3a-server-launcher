@@ -17,6 +17,21 @@ if (!BASEQ3_PATH || !existsSync(BASEQ3_PATH)) {
 
 let mapsCache: any = existsSync(DB_PATH) ? JSON.parse(readFileSync(DB_PATH, 'utf8')) : {};
 
+// Misma clave "bsp::pk3" que usa server.ts, para que mapas con el mismo nombre
+// técnico en pk3 distintos (ej: mappacks tipo "zzzz-Quake_Live_Mappack.pk3") no se
+// pisen entre sí. Si el archivo todavía tiene el esquema viejo (clave = solo bsp),
+// lo migramos acá también.
+function mapKey(bsp: string, pk3: string): string {
+    return `${(bsp || '').toLowerCase()}::${(pk3 || '').toLowerCase()}`;
+}
+{
+    const migrated: any = {};
+    for (const [k, v] of Object.entries(mapsCache) as [string, any][]) {
+        migrated[k.includes('::') ? k : mapKey(v?.bsp || k, v?.pk3 || '')] = v;
+    }
+    mapsCache = migrated;
+}
+
 console.log(`\n=================================================`);
 console.log(` Iniciando Escaneo Masivo Síncrono de Mapas .pk3`);
 console.log(` Directorio: ${BASEQ3_PATH}`);
@@ -50,9 +65,10 @@ for (const file of pk3Files) {
                         try { zip.extractEntryTo(shotEntry, PREVIEWS_PATH, false, true); } catch (e) { }
                     }
 
-                    if (!mapsCache[technicalName]) added++;
+                    const ck = mapKey(technicalName, file);
+                    if (!mapsCache[ck]) added++;
 
-                    mapsCache[technicalName] = {
+                    mapsCache[ck] = {
                         bsp: technicalName,
                         pk3: file,
                         longname: longMatch ? longMatch[1] : technicalName,

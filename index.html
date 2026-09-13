@@ -50,6 +50,184 @@
             text-shadow: 2px 2px 5px #000;
             display: none;
         }
+
+        /* --- Lista de servers activos --- */
+        #activeServers {
+            max-width: 1050px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .server-chip {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .server-chip:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .server-chip .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #4caf50;
+            box-shadow: 0 0 6px #4caf50;
+            flex-shrink: 0;
+        }
+
+        .server-chip .mode {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .server-chip .players-count {
+            opacity: 0.75;
+            font-size: 0.9em;
+        }
+
+        /* --- Modal de detalle de partida --- */
+        #matchModalOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #matchModalOverlay.open {
+            display: flex;
+        }
+
+        #matchModalBox {
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 620px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+        }
+
+        #matchModalConsole {
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 8px 10px;
+            height: 260px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.82em;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #9dff9d;
+        }
+
+        #matchModalConsole .console-empty {
+            opacity: 0.5;
+            font-style: italic;
+        }
+
+        #matchModalControls {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        #matchModalControls button {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        #matchModalControls .btn-restart {
+            background: #2b6cb0;
+        }
+
+        #matchModalControls .btn-stop {
+            background: #a52424;
+        }
+
+        #matchModalCmdRow {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* El tema global define "select, input, button { width: 90% }" que le
+           gana a nuestro flex si no lo pisamos explícitamente acá. */
+        #matchModalCmdRow input {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            background: #111;
+            color: #9dff9d;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+
+        #matchModalCmdRow button {
+            flex: 0 0 auto;
+            width: auto;
+            margin: 0;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #matchModalClose {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+
+        #matchModalShot {
+            width: 100%;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        #matchModalPlayers {
+            margin-top: 12px;
+            font-size: 0.95em;
+        }
+
+        #matchModalPlayers .player-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+        }
     </style>
 </head>
 
@@ -107,9 +285,9 @@
                 <option value="vq3">Vanilla Q3</option>
             </select>
 
-            <label>MAPA:</label>
+            <label>MAPA: <small style="opacity:0.7">(buscá por nombre, tipo o pk3, ej: "quakelive")</small></label>
             <input type="text" id="mapName" list="mapList" value="aerowalk" placeholder="Escribe o selecciona..."
-                onkeyup="checkMapPreview()" onchange="checkMapPreview()">
+                oninput="handleMapInput()" onchange="checkMapPreview()">
             <datalist id="mapList"></datalist>
 
             <button onclick="launch()">LANZAR SERVIDOR</button>
@@ -123,9 +301,32 @@
         </div>
     </div>
 
-    <h2>🛰️ RADAR DE COMBATE EN VIVO</h2>
-    <div id="console-box">
-        <div>[SISTEMA] Esperando actividad de los servidores...</div>
+    <h2>🟢 SERVERS ACTIVOS</h2>
+    <div id="activeServers">
+        <div style="opacity:.6">Ninguno activo por ahora.</div>
+    </div>
+
+    <div id="matchModalOverlay" onclick="closeMatchModal(event)">
+        <div id="matchModalBox" onclick="event.stopPropagation()">
+            <button id="matchModalClose" onclick="closeMatchModal()">✕</button>
+            <img id="matchModalShot" src="" alt="levelshot">
+            <h3 id="matchModalTitle">-</h3>
+            <div id="matchModalMap">-</div>
+            <div id="matchModalPlayers"></div>
+
+            <div id="matchModalControls">
+                <button class="btn-restart" onclick="restartServer()">🔁 Reiniciar</button>
+                <button class="btn-stop" onclick="stopServer()">🛑 Detener</button>
+            </div>
+
+            <h4 style="margin:16px 0 6px">🛰️ Consola en vivo</h4>
+            <div id="matchModalConsole"></div>
+            <div id="matchModalCmdRow">
+                <input type="text" id="matchModalCmdInput" placeholder="Comando de consola (ej: say hola, map q3dm6)..."
+                    onkeydown="if(event.key==='Enter') sendConsoleCommand()">
+                <button onclick="sendConsoleCommand()">Enviar</button>
+            </div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -145,28 +346,77 @@
             })
             .catch(e => console.error("Error cargando mapas", e));
 
-        function populateMapDatalist() {
+        // Quake3 no declara "1v1"/"2v2"/"duel" en los .arena (usa "tourney" para 1v1,
+        // y no distingue tamaño de equipo dentro de "team"/"tourney"). Mapeamos el
+        // vocabulario común a lo que realmente dice el arena para que la búsqueda
+        // "entienda" igual.
+        const TYPE_SYNONYMS = {
+            'duel': 'tourney',
+            '1v1': 'tourney',
+            '2v2': 'tourney', // Quake3 no distingue tamaño de equipo en el arena; tourney es lo más cercano
+            'dm': 'ffa',
+            'deathmatch': 'ffa',
+            'tdm': 'team', // cubre "team deathmatch"/"teamdm" además del literal "tdm"
+        };
+
+        function populateMapDatalist(query) {
             const datalist = document.getElementById('mapList');
             datalist.innerHTML = ''; // Limpiar opciones previas
 
-            // Recorrer los mapas guardados en DB y llenar la lista desplegable
-            Object.values(mapsDB).forEach(mapInfo => {
+            const q = (query || '').trim().toLowerCase();
+            const qSynonym = TYPE_SYNONYMS[q];
+
+            // Buscamos por nombre técnico (bsp), nombre largo, tipo (con sinónimos) o pk3 contenedor.
+            // Ej: escribir "quakelive" o "quake_live" lista todos los mapas de ese pk3.
+            // Ej: escribir "duel" o "1v1" también lista los "tourney" (término nativo de Q3).
+            const entries = Object.values(mapsDB).filter(mapInfo => {
+                if (!q) return true;
+                const type = (mapInfo.type || '').toLowerCase();
+                return (
+                    (mapInfo.bsp && mapInfo.bsp.toLowerCase().includes(q)) ||
+                    (mapInfo.longname && mapInfo.longname.toLowerCase().includes(q)) ||
+                    type.includes(q) ||
+                    (qSynonym && type.includes(qSynonym)) ||
+                    (mapInfo.pk3 && mapInfo.pk3.toLowerCase().includes(q))
+                );
+            });
+
+            // Si hay query, limitamos resultados para no saturar el datalist (rendimiento/UX).
+            const limited = q ? entries.slice(0, 150) : entries;
+
+            limited.forEach(mapInfo => {
                 const opt = document.createElement('option');
                 opt.value = mapInfo.bsp;
-                opt.textContent = `${mapInfo.longname} (${mapInfo.type})`;
+                opt.textContent = `${mapInfo.longname} (${mapInfo.type}) [${mapInfo.pk3}]`;
                 datalist.appendChild(opt);
             });
+        }
+
+        function handleMapInput() {
+            populateMapDatalist(document.getElementById('mapName').value);
+            checkMapPreview();
+        }
+
+        // mapsDB ahora viene keyeado por "bsp::pk3" (no por bsp solo, ver
+        // populateMapDatalist) porque el mismo bsp puede venir de pk3 distintos.
+        // Buscamos por el campo .bsp en vez de acceder directo por esa clave.
+        // Si hay varias entradas con el mismo bsp, preferimos una que tenga
+        // levelshot (puede que la primera que aparezca no tenga miniatura).
+        function findMapEntryByBsp(bsp) {
+            const matches = Object.values(mapsDB).filter(m => m.bsp === bsp);
+            return matches.find(m => m.levelshot) || matches[0] || null;
         }
 
         function checkMapPreview() {
             const mapInput = document.getElementById('mapName').value.trim().toLowerCase();
             const previewImg = document.getElementById('mapPreview');
             const infoTitle = document.getElementById('mapInfoTitle');
+            const mapInfo = findMapEntryByBsp(mapInput);
 
-            if (mapsDB[mapInput] && mapsDB[mapInput].levelshot) {
-                previewImg.src = mapsDB[mapInput].levelshot;
+            if (mapInfo && mapInfo.levelshot) {
+                previewImg.src = mapInfo.levelshot;
                 previewImg.style.display = 'block';
-                infoTitle.innerText = `${mapsDB[mapInput].longname || mapInput} (${mapsDB[mapInput].type})`;
+                infoTitle.innerText = `${mapInfo.longname || mapInput} (${mapInfo.type})`;
                 infoTitle.style.display = 'block';
             } else {
                 previewImg.style.display = 'none';
@@ -174,6 +424,141 @@
                 infoTitle.style.display = 'block';
             }
         }
+
+        // --- LISTA DE SERVERS ACTIVOS + MODAL DE PARTIDA ---
+        async function refreshActiveServers() {
+            try {
+                const res = await fetch('/api/servers');
+                const servers = await res.json();
+                const container = document.getElementById('activeServers');
+
+                if (!servers.length) {
+                    container.innerHTML = '<div style="opacity:.6">Ninguno activo por ahora.</div>';
+                    return;
+                }
+
+                container.innerHTML = servers.map(s => `
+                    <div class="server-chip" onclick="openMatchModal('${s.mode}')">
+                        <span class="dot"></span>
+                        <span class="mode">${s.mode}</span>
+                        <span>${s.map}</span>
+                        <span class="players-count">${s.players.length} jugador${s.players.length === 1 ? '' : 'es'}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Error refrescando servers activos', e);
+            }
+        }
+
+        let openConsoleMode = null;
+        let modalRefreshTimer = null;
+
+        // Trae y pinta título/mapa/miniatura/jugadores del server -- separado de
+        // openMatchModal para poder llamarlo en loop mientras el modal está
+        // abierto (si alguien cambia de mapa por consola, esto lo refleja solo).
+        async function updateMatchModalContent(mode) {
+            try {
+                const res = await fetch(`/api/servers/${mode}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (mode !== openConsoleMode) return; // se cerró/cambió el modal mientras esperábamos
+
+                document.getElementById('matchModalTitle').innerText = `${data.mode.toUpperCase()} - ${data.hostname}`;
+                document.getElementById('matchModalMap').innerText = `Mapa: ${data.longname} (${data.map}) — puerto ${data.port}`;
+
+                const shot = document.getElementById('matchModalShot');
+                if (data.levelshot) {
+                    if (shot.src !== location.origin + data.levelshot) shot.src = data.levelshot;
+                    shot.style.display = 'block';
+                } else {
+                    shot.style.display = 'none';
+                }
+
+                const playersDiv = document.getElementById('matchModalPlayers');
+                if (data.players.length === 0) {
+                    playersDiv.innerHTML = '<div style="opacity:.6">Sin jugadores conectados.</div>';
+                } else {
+                    playersDiv.innerHTML = '<strong>Jugadores:</strong>' + data.players.map(p =>
+                        `<div class="player-row"><span>${p.name}</span><span>${p.score} pts / ${p.ping}ms</span></div>`
+                    ).join('');
+                }
+            } catch (e) {
+                console.error('Error actualizando modal de partida', e);
+            }
+        }
+
+        async function openMatchModal(mode) {
+            openConsoleMode = mode;
+            await updateMatchModalContent(mode);
+
+            // Consola en vivo: nos suscribimos a los logs del container de ESTE modo.
+            const consoleBox = document.getElementById('matchModalConsole');
+            consoleBox.innerHTML = '<div class="console-empty">Conectando a la consola...</div>';
+            socket.emit('watch_console', mode);
+
+            document.getElementById('matchModalOverlay').classList.add('open');
+
+            // Refresco periódico mientras el modal sigue abierto (mapa/miniatura/
+            // jugadores en vivo, ej. si cambiás de mapa por consola).
+            if (modalRefreshTimer) clearInterval(modalRefreshTimer);
+            modalRefreshTimer = setInterval(() => updateMatchModalContent(mode), 4000);
+        }
+
+        function closeMatchModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('matchModalOverlay').classList.remove('open');
+            openConsoleMode = null;
+            if (modalRefreshTimer) { clearInterval(modalRefreshTimer); modalRefreshTimer = null; }
+            socket.emit('unwatch_console');
+        }
+
+        socket.on('console_line', (data) => {
+            if (data.mode !== openConsoleMode) return; // el modal de otro server, ignorar
+            const box = document.getElementById('matchModalConsole');
+            const wasEmpty = box.querySelector('.console-empty');
+            if (wasEmpty) box.innerHTML = '';
+
+            const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
+            const line = document.createElement('div');
+            line.textContent = data.text;
+            box.appendChild(line);
+            if (atBottom) box.scrollTop = box.scrollHeight;
+        });
+
+        function sendConsoleCommand() {
+            if (!openConsoleMode) return;
+            const input = document.getElementById('matchModalCmdInput');
+            const command = input.value.trim();
+            if (!command) return;
+            socket.emit('send_command', { mode: openConsoleMode, command });
+            input.value = '';
+        }
+
+        function restartServer() {
+            if (!openConsoleMode) return;
+            if (!confirm(`¿Reiniciar el server "${openConsoleMode.toUpperCase()}"? Se corta la partida en curso.`)) return;
+            socket.emit('restart_server', openConsoleMode);
+        }
+
+        function stopServer() {
+            if (!openConsoleMode) return;
+            if (!confirm(`¿Detener el server "${openConsoleMode.toUpperCase()}"?`)) return;
+            socket.emit('stop_server', openConsoleMode);
+        }
+
+        // Cuando el server que estamos mirando se reinicia o se detiene, cerramos
+        // el modal -- el container viejo (y su stream de consola) ya no existe.
+        socket.on('server_restarted', (mode) => {
+            if (mode === openConsoleMode) closeMatchModal();
+            refreshActiveServers();
+        });
+        socket.on('server_stopped', (mode) => {
+            if (mode === openConsoleMode) closeMatchModal();
+            refreshActiveServers();
+        });
+
+        refreshActiveServers();
+        setInterval(refreshActiveServers, 7000);
 
         // --- SISTEMA DE TEMAS ---
         function changeTheme() {
@@ -204,7 +589,6 @@
         function killAll() {
             if (confirm('¿Aniquilar todos los servidores de Meg & Yim?')) {
                 socket.emit('kill_all');
-                document.getElementById('console-box').innerHTML = '<div>[SISTEMA] Servidores aniquilados.</div>';
             }
         }
 
@@ -215,46 +599,6 @@
         socket.on('map_search_fallback', (data) => {
             const statusDiv = document.getElementById('status');
             statusDiv.innerHTML = `❌ Mapa "${data.mapName}" no encontrado. <br><a href="${data.url}" target="_blank" style="color:#ffcc00; text-decoration:underline; font-weight:bold;">🔎 Buscar "${data.mapName}" en Google</a>`;
-        });
-
-        socket.on('chat_msg', (data) => {
-            const box = document.getElementById('console-box');
-
-            // Eliminamos el filtro 'esInteresante' para ver TODO lo que escupe la consola
-            const line = document.createElement('div');
-            line.className = 'log-line';
-
-            const colors = { 'ctf': '#ff4500', '1v1': '#00d4ff', 'ffa': '#ffcc00', 'ca': '#ff00ff', 'ftag': '#00ff00', 'ctfs': '#ff00ff', 'ra': '#00ffff' };
-            const modeColor = colors[data.mode] || '#eee';
-
-            // Usamos textContent para mayor seguridad, o innerHTML si confías en los datos
-            line.innerHTML = `<span style="color: ${modeColor}">[${data.mode.toUpperCase()}]</span> ${data.text}`;
-
-            box.appendChild(line);
-
-            // Auto-scroll para ver lo último
-            box.scrollTop = box.scrollHeight;
-        });
-
-        socket.on('chat_msg', (data) => {
-            const box = document.getElementById('console-box');
-
-            // Filtro para no llenar la web de basura técnica (opcional)
-            // Solo muestra líneas que tengan ":" (chat) o palabras de combate
-            const text = data.text.toLowerCase();
-            const esInteresante = text.includes(':') || text.includes('fragged') || text.includes('killed') || text.includes('connected');
-
-            if (esInteresante) {
-                const line = document.createElement('div');
-                line.className = 'log-line';
-
-                const colors = { 'ctf': '#ff4500', '1v1': '#00d4ff', 'ffa': '#ffcc00', 'ca': '#ff00ff', 'ftag': '#00ff00', 'ctfs': '#ff00ff', 'ra': '#00ffff' };
-                const modeColor = colors[data.mode] || '#eee';
-
-                line.innerHTML = `<span style="color: ${modeColor}">[${data.mode.toUpperCase()}]</span> ${data.text}`;
-                box.appendChild(line);
-                box.scrollTop = box.scrollHeight;
-            }
         });
     </script>
 </body>
