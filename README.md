@@ -20,6 +20,12 @@ Un panel de control web moderno, dinámico y automatizado para lanzar servidores
 - **🖼️ Interfaz Web Dinámica**: Temas visuales personalizables (Dark, Ocean Animado, Retro Terminal), auto-completado de mapas con visualización de nivel (*levelshots*), y una terminal de combate o consola que muestra la actividad del servidor en vivo vía WebSockets.
 - **⚙️ Escáner en Segundo Plano**: Al iniciar, un servicio no bloqueante parsea todos tus archivos `.pk3` localizando los archivos `.arena` para extraer automáticamente los nombres técnicos, nombres completos, tipos de juego y extraer las capturas de pantalla de cada mapa para mostrárselas al usuario en la web.
 
+<img width="1124" height="770" alt="image" src="https://github.com/user-attachments/assets/4dbb400f-2339-4f22-9502-92624c3cb460" />
+
+
+<img width="799" height="953" alt="image" src="https://github.com/user-attachments/assets/a2ccb38a-bfc2-4912-b17c-1a989931af0b" />
+
+
 ## 🚀 Requisitos
 
 - **Node.js**: Instalado en el sistema (idealmente v18 o superior).
@@ -59,5 +65,5 @@ Una vez iniciado, ingresa a `http://localhost` desde tu navegador. El servidor h
 
 ### Menciones
 
-Desarrollado y automatizado con el esfuerzo conjunto del usuario y el Asistente de IA **Google Gemini / Antigravity**. 
+Desarrollado y automatizado con el esfuerzo conjunto del usuario y el Asistente de IA **Google Gemini / Antigravity / Claude Code**. 
 *Hecho para amantes puros de los Arena FPS.*
