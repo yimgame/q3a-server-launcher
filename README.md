@@ -65,5 +65,5 @@ Una vez iniciado, ingresa a `http://localhost` desde tu navegador. El servidor h
 
 ### Menciones
 
-Desarrollado y automatizado con el esfuerzo conjunto del usuario y el Asistente de IA **Google Gemini / Antigravity**. 
+Desarrollado y automatizado con el esfuerzo conjunto del usuario y el Asistente de IA **Google Gemini / Antigravity / Claude Code**. 
 *Hecho para amantes puros de los Arena FPS.*
