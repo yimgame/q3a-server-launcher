@@ -528,6 +528,7 @@ io.on('connection', (socket) => {
             await launchModeContainer(modeKey, profile, data.mod, mapInfo.bsp);
             currentMatches[modeKey] = { ...mapInfo, launchedAt: Date.now() };
             socket.emit('status', `🚀 Servidor Online: ${mapInfo.bsp} (puerto ${profile.port})`);
+            socket.emit('server_launched', { connect: `${Q3_HOST_IP}:${profile.port}` });
         } catch (e: any) {
             console.error('Error lanzando container:', e);
             socket.emit('status', `❌ Error lanzando el server: ${e.message}`);

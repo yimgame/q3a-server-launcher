@@ -199,6 +199,15 @@
             cursor: pointer;
         }
 
+        .copyable {
+            cursor: pointer;
+            text-decoration: underline dotted;
+        }
+
+        .copyable:hover {
+            opacity: 0.85;
+        }
+
         #matchModalClose {
             position: absolute;
             top: 10px;
@@ -464,7 +473,19 @@
                 if (mode !== openConsoleMode) return; // se cerró/cambió el modal mientras esperábamos
 
                 document.getElementById('matchModalTitle').innerText = `${data.mode.toUpperCase()} - ${data.hostname}`;
-                document.getElementById('matchModalMap').innerText = `Mapa: ${data.longname} (${data.map}) — puerto ${data.port}`;
+
+                const mapDiv = document.getElementById('matchModalMap');
+                const connectStr = `${location.hostname}:${data.port}`;
+                mapDiv.innerText = `Mapa: ${data.longname} (${data.map}) — puerto ${data.port}  📋 (click para copiar "connect ${connectStr}")`;
+                mapDiv.classList.add('copyable');
+                mapDiv.onclick = () => {
+                    const text = `connect ${connectStr}`;
+                    copyToClipboard(text).then(() => {
+                        const prev = mapDiv.innerText;
+                        mapDiv.innerText = `✅ Copiado: ${text}`;
+                        setTimeout(() => { if (openConsoleMode === mode) updateMatchModalContent(mode); }, 1500);
+                    });
+                };
 
                 const shot = document.getElementById('matchModalShot');
                 if (data.levelshot) {
@@ -592,8 +613,56 @@
             }
         }
 
+        // navigator.clipboard requiere HTTPS (o localhost) en la mayoría de los
+        // navegadores -- este panel se sirve por HTTP plano en la LAN, así que
+        // necesitamos el fallback viejo (textarea + execCommand) o el copiado
+        // simplemente no funciona.
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            }
+            return new Promise((resolve, reject) => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try {
+                    document.execCommand('copy') ? resolve() : reject(new Error('execCommand falló'));
+                } catch (e) {
+                    reject(e);
+                } finally {
+                    document.body.removeChild(ta);
+                }
+            });
+        }
+
         socket.on('status', (msg) => {
-            document.getElementById('status').innerText = msg;
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = msg;
+            statusDiv.classList.remove('copyable');
+            statusDiv.onclick = null;
+        });
+
+        // Al lanzar bien un server, el status queda clickeable para copiar el
+        // "connect ip:puerto" directo (para pegar en la consola de Quake3).
+        socket.on('server_launched', ({ connect }) => {
+            const statusDiv = document.getElementById('status');
+            const original = statusDiv.innerText;
+            statusDiv.innerText = `${original}  📋 (click para copiar "connect ${connect}")`;
+            statusDiv.classList.add('copyable');
+            statusDiv.onclick = () => {
+                const text = `connect ${connect}`;
+                copyToClipboard(text).then(() => {
+                    const prev = statusDiv.innerText;
+                    statusDiv.innerText = `✅ Copiado: ${text}`;
+                    setTimeout(() => { statusDiv.innerText = prev; }, 1800);
+                }).catch(() => {
+                    statusDiv.innerText = `${original}  (no se pudo copiar, escribí a mano: ${text})`;
+                });
+            };
         });
 
         socket.on('map_search_fallback', (data) => {
