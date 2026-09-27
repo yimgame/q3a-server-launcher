@@ -17,6 +17,7 @@ Un panel de control web moderno, dinámico y automatizado para lanzar servidores
   4. Búsqueda y descarga inteligente desde la API de **LvLWorld**.
   5. Intercepción de descarga en espectros de servidores directos de la comunidad (ej. sst13.de).
   6. Si todo falla, mostrará un enlace directo a Google configurado para encontrar el mapa.
+  7. lista los proximos mapas por medio de cfg vstr nexmap v1 v2 v3 etc con miniatura en modal
 - **🖼️ Interfaz Web Dinámica**: Temas visuales personalizables (Dark, Ocean Animado, Retro Terminal), auto-completado de mapas con visualización de nivel (*levelshots*), y una terminal de combate o consola que muestra la actividad del servidor en vivo vía WebSockets.
 - **⚙️ Escáner en Segundo Plano**: Al iniciar, un servicio no bloqueante parsea todos tus archivos `.pk3` localizando los archivos `.arena` para extraer automáticamente los nombres técnicos, nombres completos, tipos de juego y extraer las capturas de pantalla de cada mapa para mostrárselas al usuario en la web.
 
@@ -24,6 +25,8 @@ Un panel de control web moderno, dinámico y automatizado para lanzar servidores
 
 
 <img width="799" height="953" alt="image" src="https://github.com/user-attachments/assets/a2ccb38a-bfc2-4912-b17c-1a989931af0b" />
+
+<img width="1023" height="571" alt="image" src="https://github.com/user-attachments/assets/261ca9a8-021e-4590-8421-0209b1da4740" />
 
 
 ## 🚀 Requisitos
