@@ -237,6 +237,109 @@
             padding: 3px 0;
             border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
         }
+
+        .server-chip.permanent {
+            border-color: rgba(120, 180, 255, 0.4);
+        }
+
+        .perm-badge {
+            font-size: 0.85em;
+        }
+
+        /* --- Modal de rotación / próximos mapas --- */
+        #nextmapModalOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #nextmapModalOverlay.open {
+            display: flex;
+        }
+
+        #nextmapModalBox {
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 900px;
+            width: 92%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
+        }
+
+        #nextmapModalClose {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+
+        #nextmapCurrent {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 16px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            border: 1px solid rgba(120, 220, 140, 0.4);
+        }
+
+        #nextmapCurrent img {
+            width: 100px;
+            height: 62px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        #nextmapGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .nextmap-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.1s ease;
+        }
+
+        .nextmap-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 200, 0, 0.6);
+        }
+
+        .nextmap-card img {
+            width: 100%;
+            height: 90px;
+            object-fit: cover;
+            display: block;
+            background: #000;
+        }
+
+        .nextmap-card .nextmap-card-label {
+            padding: 6px 8px;
+            font-size: 0.82em;
+        }
+
+        .nextmap-card .nextmap-card-pos {
+            opacity: 0.6;
+            font-size: 0.75em;
+        }
     </style>
 </head>
 
@@ -327,6 +430,7 @@
                 <button class="btn-restart" onclick="restartServer()">🔁 Reiniciar</button>
                 <button class="btn-stop" onclick="stopServer()">🛑 Detener</button>
             </div>
+            <button id="btnNextmap" style="display:none; margin-top:10px" onclick="openNextmapModal()">🗺️ Ver rotación / próximos mapas</button>
 
             <h4 style="margin:16px 0 6px">🛰️ Consola en vivo</h4>
             <div id="matchModalConsole"></div>
@@ -335,6 +439,18 @@
                     onkeydown="if(event.key==='Enter') sendConsoleCommand()">
                 <button onclick="sendConsoleCommand()">Enviar</button>
             </div>
+        </div>
+    </div>
+
+    <div id="nextmapModalOverlay" onclick="closeNextmapModal(event)">
+        <div id="nextmapModalBox" onclick="event.stopPropagation()">
+            <button id="nextmapModalClose" onclick="closeNextmapModal()">✕</button>
+            <h3 id="nextmapModalTitle">Rotación de mapas</h3>
+
+            <div id="nextmapCurrent"></div>
+
+            <h4 style="margin:0 0 8px">Siguen en la ronda (click para saltar ahora):</h4>
+            <div id="nextmapGrid"></div>
         </div>
     </div>
 
@@ -447,8 +563,9 @@
                 }
 
                 container.innerHTML = servers.map(s => `
-                    <div class="server-chip" onclick="openMatchModal('${s.mode}')">
+                    <div class="server-chip ${s.permanent ? 'permanent' : ''}" onclick="openMatchModal('${s.id}')">
                         <span class="dot"></span>
+                        ${s.permanent ? '<span class="perm-badge" title="Server permanente (27xxx)">🔒</span>' : ''}
                         <span class="mode">${s.mode}</span>
                         <span>${s.map}</span>
                         <span class="players-count">${s.players.length} jugador${s.players.length === 1 ? '' : 'es'}</span>
@@ -503,6 +620,14 @@
                         `<div class="player-row"><span>${p.name}</span><span>${p.score} pts / ${p.ping}ms</span></div>`
                     ).join('');
                 }
+
+                // Los permanentes no se reinician/detienen desde acá (los maneja
+                // Portainer), pero SÍ tienen rotación de mapas -- al revés que los
+                // efímeros del launcher (se reinician/detienen bien, pero no tienen
+                // un nextmap_<modo>.cfg configurado).
+                document.getElementById('matchModalControls').style.display = data.permanent ? 'none' : 'flex';
+                document.getElementById('btnNextmap').style.display = data.permanent ? 'block' : 'none';
+                currentModalRealMode = data.mode; // "ctf", sin el prefijo "p_" -- lo usa el modal de nextmap
             } catch (e) {
                 console.error('Error actualizando modal de partida', e);
             }
@@ -531,6 +656,71 @@
             openConsoleMode = null;
             if (modalRefreshTimer) { clearInterval(modalRefreshTimer); modalRefreshTimer = null; }
             socket.emit('unwatch_console');
+        }
+
+        // --- MODAL DE ROTACIÓN / PRÓXIMOS MAPAS (solo servers permanentes) ---
+        let currentModalRealMode = null; // "ctf", sin el prefijo "p_" -- seteado en updateMatchModalContent
+        let nextmapRefreshTimer = null;
+
+        function renderNextmapCard(mapInfo, mode, positionLabel) {
+            const shot = mapInfo.levelshot || '';
+            return `
+                <div class="nextmap-card" onclick="jumpToMap('${mode}', '${mapInfo.bsp}')" title="Click para cargar este mapa ahora">
+                    ${shot ? `<img src="${shot}" alt="${mapInfo.longname}">` : `<div style="height:90px;display:flex;align-items:center;justify-content:center;opacity:.4">sin miniatura</div>`}
+                    <div class="nextmap-card-label">
+                        <div>${mapInfo.longname}</div>
+                        <div class="nextmap-card-pos">${positionLabel}</div>
+                    </div>
+                </div>`;
+        }
+
+        async function refreshNextmapModal() {
+            if (!currentModalRealMode) return;
+            try {
+                const res = await fetch(`/api/nextmap/${currentModalRealMode}`);
+                if (!res.ok) {
+                    document.getElementById('nextmapGrid').innerHTML = '<div style="opacity:.6">No hay rotación configurada para este modo.</div>';
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('nextmapModalTitle').innerText = `Rotación de mapas — ${data.mode.toUpperCase()}`;
+
+                const curDiv = document.getElementById('nextmapCurrent');
+                if (data.current) {
+                    curDiv.innerHTML = `
+                        ${data.current.levelshot ? `<img src="${data.current.levelshot}">` : ''}
+                        <div><strong>Ahora jugando:</strong> ${data.current.longname}${!data.online ? ' <span style="color:#f66">(server sin respuesta)</span>' : ''}</div>`;
+                } else {
+                    curDiv.innerHTML = '<div>No se pudo determinar el mapa actual.</div>';
+                }
+
+                document.getElementById('nextmapGrid').innerHTML = data.upcoming.map((m, i) =>
+                    renderNextmapCard(m, data.mode, `#${i + 1} en la ronda`)
+                ).join('');
+            } catch (e) {
+                console.error('Error trayendo nextmap', e);
+            }
+        }
+
+        function openNextmapModal() {
+            if (!currentModalRealMode) return;
+            document.getElementById('nextmapModalOverlay').classList.add('open');
+            refreshNextmapModal();
+            if (nextmapRefreshTimer) clearInterval(nextmapRefreshTimer);
+            nextmapRefreshTimer = setInterval(refreshNextmapModal, 6000);
+        }
+
+        function closeNextmapModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('nextmapModalOverlay').classList.remove('open');
+            if (nextmapRefreshTimer) { clearInterval(nextmapRefreshTimer); nextmapRefreshTimer = null; }
+        }
+
+        // Admin del launcher = siempre puede saltar de mapa directo, sin votar.
+        function jumpToMap(mode, bsp) {
+            if (!confirm(`¿Cargar "${bsp}" ahora en ${mode.toUpperCase()}? Corta la partida en curso.`)) return;
+            socket.emit('set_permanent_map', { mode, map: bsp });
+            setTimeout(refreshNextmapModal, 1500);
         }
 
         socket.on('console_line', (data) => {

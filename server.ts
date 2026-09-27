@@ -141,6 +141,20 @@ const PROFILES: any = {
     'ra': { port: 28067, mode: 8, cfg: 'yimq3a-cpma-ra-server-gemini.cfg', mapCfg: 'ramaps.cfg', folder: 'launcher_ra' }
 };
 
+// Los 6 servers FIJOS y permanentes (stack "quake3_server" en Portainer, container_name
+// quake3_<modo>, puertos 27960-27965) -- corren siempre, no los lanza/mata este launcher,
+// pero sí los queremos LISTAR y poder administrarles el mapa (via rcon UDP, no via stdin
+// de Docker como con los que sí lanzamos nosotros). Cada uno tiene su propio chain de
+// rotación manual en cfg-maps/nextmap_<modo>.cfg (ver /api/nextmap/:mode más abajo).
+const PERMANENT_SERVERS: any = {
+    'ffa': { port: 27960, containerName: 'quake3_ffa', rconPassword: 'Megcone', label: 'FFA' },
+    '1v1': { port: 27961, containerName: 'quake3_1v1', rconPassword: 'Megcone', label: '1v1' },
+    '2v2': { port: 27962, containerName: 'quake3_2v2', rconPassword: 'Megcone', label: '2v2' },
+    'tdm': { port: 27963, containerName: 'quake3_tdm', rconPassword: 'Megcone', label: 'TDM' },
+    'ctf': { port: 27964, containerName: 'quake3_ctf', rconPassword: 'Megcone', label: 'CTF' },
+    'ca': { port: 27965, containerName: 'quake3_clan_arena', rconPassword: 'Megcone', label: 'CA' }
+};
+
 // Info del último mapa lanzado por modo (bsp/longname/levelshot), para mostrar
 // en la lista de servers activos sin tener que re-parsear el pk3 cada vez.
 const currentMatches: Record<string, any> = {};
@@ -210,10 +224,58 @@ function queryGameServer(port: number, timeoutMs = 1500): Promise<any | null> {
     });
 }
 
+// Manda un comando por RCON nativo de Quake3 (protocolo OOB UDP) a un server
+// que NO lanzamos nosotros -- se usa para administrar los 6 servers fijos
+// (PERMANENT_SERVERS), que no tienen un stdin de Docker adjuntado como los
+// que sí crea este launcher. No valida la respuesta más allá de esperarla
+// (o no) con timeout corto -- no todos los comandos de Q3 contestan texto.
+function sendRcon(port: number, password: string, command: string, timeoutMs = 2000): Promise<string | null> {
+    return new Promise((resolve) => {
+        const socket = dgram.createSocket('udp4');
+        let done = false;
+        const finish = (result: string | null) => {
+            if (done) return;
+            done = true;
+            try { socket.close(); } catch (e) { }
+            resolve(result);
+        };
+        const timer = setTimeout(() => finish(null), timeoutMs);
+        socket.on('message', (msg) => {
+            clearTimeout(timer);
+            finish(msg.toString('utf8'));
+        });
+        socket.on('error', () => finish(null));
+        const packet = Buffer.concat([Buffer.from([0xff, 0xff, 0xff, 0xff]), Buffer.from(`rcon ${password} ${command}`)]);
+        socket.send(packet, port, Q3_HOST_IP);
+    });
+}
+
 // Solo dejamos pasar caracteres seguros para lo que termina en un comando de shell dentro del container nuevo
 function sanitize(value: string, fallback: string): string {
     const cleaned = (value || '').replace(/[^a-zA-Z0-9_.\-]/g, '');
     return cleaned || fallback;
+}
+
+// Extrae un levelshot del zip y lo deja en disco con el MISMO nombre en
+// minúsculas que usamos como clave en la DB (technicalName.ext). AdmZip
+// preserva el casing original del archivo dentro del zip al extraer (ej.
+// "Q3DM17Remix.jpg"), pero la DB siempre guarda la ruta en minúsculas
+// ("q3dm17remix.jpg") -- en un filesystem case-sensitive (Linux) eso son
+// dos archivos distintos, y el frontend terminaba pidiendo uno que no
+// existía (broken image). Renombramos después de extraer para que coincidan.
+function extractLevelshot(zip: AdmZip, shotEntry: any, technicalName: string): string {
+    const ext = path.extname(shotEntry.entryName).toLowerCase() || '.jpg';
+    const finalName = `${technicalName}${ext}`;
+    zip.extractEntryTo(shotEntry, PREVIEWS_PATH, false, true);
+    const extractedPath = path.join(PREVIEWS_PATH, path.basename(shotEntry.entryName));
+    const finalPath = path.join(PREVIEWS_PATH, finalName);
+    if (extractedPath !== finalPath && existsSync(extractedPath)) {
+        try {
+            copyFileSync(extractedPath, finalPath);
+            unlinkSync(extractedPath);
+        } catch (e) { /* si falla el rename, seguimos con lo que se extrajo */ }
+    }
+    return finalName;
 }
 
 // --- ESCÁNER DE .ARENA (BUSCA NOMBRE LARGO -> NOMBRE TÉCNICO) ---
@@ -236,8 +298,9 @@ function scanPk3ForMap(pk3Path: string, query: string): any | null {
                         const technicalName = bsp.trim().toLowerCase();
 
                         const shotEntry = zip.getEntries().find(e => e.entryName.toLowerCase() === `levelshots/${technicalName}.jpg`);
+                        let levelshotFile: string | null = null;
                         if (shotEntry) {
-                            zip.extractEntryTo(shotEntry, PREVIEWS_PATH, false, true);
+                            levelshotFile = extractLevelshot(zip, shotEntry, technicalName);
                         }
 
                         return {
@@ -246,7 +309,7 @@ function scanPk3ForMap(pk3Path: string, query: string): any | null {
                             loc: 'baseq3',
                             longname: longMatch ? longMatch[1] : query,
                             type: typeMatch ? typeMatch[1].toLowerCase() : 'unknown',
-                            levelshot: shotEntry ? `/previews/${technicalName}.jpg` : null
+                            levelshot: levelshotFile ? `/previews/${levelshotFile}` : null
                         };
                     }
                 }
@@ -384,7 +447,7 @@ async function launchModeContainer(modeKey: string, profile: any, modName: strin
         `+set dedicated 2`,
         `+set net_port ${profile.port}`,
         `+set sv_allowDownload 1`,
-        `+set sv_dlURL "${SERVER_DL_URL}"`,
+        `+set sv_dlURL '"${SERVER_DL_URL}"'`,
         `+set sv_pure 0`,
         `+set com_hunkMegs 512`,
         `+set com_zoneMegs 128`,
@@ -554,31 +617,59 @@ io.on('connection', (socket) => {
         }
     }
 
-    socket.on('watch_console', async (modeKey: string) => {
+    // id puede ser "ctf" (launcher efímero, container q3launcher-ctf) o "p_ctf"
+    // (permanente, container quake3_ctf -- ver PERMANENT_SERVERS). El nombre real
+    // del container de Docker se resuelve distinto en cada caso.
+    function resolveContainerName(id: string): string | null {
+        if (id.startsWith('p_')) {
+            const modeKey = id.slice(2);
+            return PERMANENT_SERVERS[modeKey]?.containerName || null;
+        }
+        return `q3launcher-${id}`;
+    }
+
+    socket.on('watch_console', async (id: string) => {
         stopConsoleStream();
-        const containerName = `q3launcher-${modeKey}`;
+        const containerName = resolveContainerName(id);
+        if (!containerName) {
+            socket.emit('console_line', { mode: id, text: '[Modo desconocido]' });
+            return;
+        }
         try {
             const container = docker.getContainer(containerName);
             const stream: any = await container.logs({ follow: true, stdout: true, stderr: true, tail: 150 });
             consoleStream = stream;
             const emitLine = (chunk: Buffer) => {
-                socket.emit('console_line', { mode: modeKey, text: chunk.toString('utf8') });
+                socket.emit('console_line', { mode: id, text: chunk.toString('utf8') });
             };
             // demuxStream separa el multiplexado de Docker (stdout/stderr en un
             // mismo stream con headers) en dos streams de texto planos.
             container.modem.demuxStream(stream, { write: emitLine }, { write: emitLine });
             stream.on('error', () => { });
         } catch (e: any) {
-            socket.emit('console_line', { mode: modeKey, text: `[No se pudo conectar a la consola: ${e.message}]` });
+            socket.emit('console_line', { mode: id, text: `[No se pudo conectar a la consola: ${e.message}]` });
         }
     });
 
     socket.on('unwatch_console', () => stopConsoleStream());
     socket.on('disconnect', () => stopConsoleStream());
 
-    // Manda un comando de consola (rcon-like) al stdin del server ya corriendo.
-    // Ej: "map q3dm6", "kick all", "say hola", cualquier comando de consola nativo.
-    socket.on('send_command', ({ mode, command }: { mode: string; command: string }) => {
+    // Manda un comando de consola. Para servers que lanzamos nosotros va por
+    // stdin (como siempre); para los permanentes ("p_<modo>") no tenemos stdin
+    // adjuntado, así que va por rcon UDP nativo de Quake3 -- mismo efecto neto,
+    // el jugador/admin no nota la diferencia.
+    socket.on('send_command', async ({ mode, command }: { mode: string; command: string }) => {
+        if (mode.startsWith('p_')) {
+            const modeKey = mode.slice(2);
+            const profile = PERMANENT_SERVERS[modeKey];
+            if (!profile) {
+                socket.emit('console_line', { mode, text: '[Modo desconocido]' });
+                return;
+            }
+            const reply = await sendRcon(profile.port, profile.rconPassword, command);
+            socket.emit('console_line', { mode, text: reply ? reply.replace(/^\xff\xff\xff\xffprint\n?/, '') : `[Comando enviado, sin respuesta de texto: ${command}]` });
+            return;
+        }
         const stream = stdinStreams[mode];
         if (!stream) {
             socket.emit('console_line', { mode, text: '[No hay conexión de consola activa a este server]' });
@@ -592,8 +683,15 @@ io.on('connection', (socket) => {
     });
 
     // Reinicia el server con los mismos mapa/mod/modo con los que se lanzó la
-    // última vez (así no hay que volver a elegir todo desde cero).
+    // última vez (así no hay que volver a elegir todo desde cero). Solo aplica
+    // a los servers que lanza este launcher -- los permanentes los administra
+    // el stack de Portainer, no tiene sentido "relanzarlos" desde acá con estos
+    // parámetros efímeros.
     socket.on('restart_server', async (modeKey: string) => {
+        if (modeKey.startsWith('p_')) {
+            socket.emit('status', `❌ Los servers permanentes no se reinician desde acá (los administra Portainer).`);
+            return;
+        }
         const profile = PROFILES[modeKey];
         const last = lastLaunchParams[modeKey];
         if (!profile || !last) {
@@ -610,12 +708,34 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Apaga (borra) el container de este server puntual.
+    // Apaga (borra) el container de este server puntual. Mismo criterio que
+    // restart_server: no aplica a los permanentes.
     socket.on('stop_server', async (modeKey: string) => {
+        if (modeKey.startsWith('p_')) {
+            socket.emit('status', `❌ Los servers permanentes no se detienen desde acá (los administra Portainer).`);
+            return;
+        }
         socket.emit('status', `🛑 Deteniendo ${modeKey}...`);
         await stopModeContainer(modeKey);
         socket.emit('status', `🛑 ${modeKey} detenido.`);
         socket.emit('server_stopped', modeKey);
+    });
+
+    // Salta a un mapa puntual de la ronda de un server permanente (rcon directo,
+    // acción deliberada de un click). Ver /api/permanent-servers/:mode/set-map
+    // para el equivalente REST -- este socket existe para no tener que hacer un
+    // fetch aparte desde el modal de nextmap.
+    socket.on('set_permanent_map', async ({ mode, map }: { mode: string; map: string }) => {
+        const profile = PERMANENT_SERVERS[mode];
+        if (!profile) {
+            socket.emit('status', `❌ Modo desconocido: ${mode}`);
+            return;
+        }
+        const safeMap = sanitize(map, '');
+        if (!safeMap) return;
+        socket.emit('status', `🗺️ Cambiando ${mode.toUpperCase()} a ${safeMap}...`);
+        await sendRcon(profile.port, profile.rconPassword, `map ${safeMap}`);
+        socket.emit('status', `✅ ${mode.toUpperCase()} → ${safeMap}`);
     });
 });
 
@@ -689,70 +809,146 @@ function getMapMeta(mapBsp: string | undefined, launched: any) {
     };
 }
 
-app.get('/api/servers', async (req, res) => {
-    const servers: any[] = [];
-    for (const modeKey of Object.keys(PROFILES)) {
-        const profile = PROFILES[modeKey];
-        const name = `q3launcher-${modeKey}`;
-        let running = false;
-        let startedAt: string | undefined;
-        try {
-            const c = docker.getContainer(name);
-            const info = await c.inspect();
-            running = info.State.Running;
-            startedAt = info.State.StartedAt;
-        } catch (e) { /* no existe, running queda false */ }
-
-        if (!running) continue;
-
-        const live = await queryGameServer(profile.port);
-        const launched = currentMatches[modeKey];
-        const mapBsp = live?.map || launched?.bsp;
-        const meta = getMapMeta(mapBsp, launched);
-
-        servers.push({
-            mode: modeKey,
-            port: profile.port,
-            startedAt,
-            hostname: live?.hostname || launched?.longname || modeKey.toUpperCase(),
-            map: mapBsp || '?',
-            longname: meta.longname,
-            levelshot: meta.levelshot,
-            players: live?.players || []
-        });
-    }
-    res.json(servers);
-});
-
-// Detalle de un server puntual (para el modal al hacer click en la lista)
-app.get('/api/servers/:mode', async (req, res) => {
-    const modeKey = req.params.mode;
+// Nota de IDs: los servers permanentes se exponen con id "p_<modo>" (ej. "p_ctf")
+// para no chocar con los launcher_<modo> efímeros que pueden tener el mismo
+// nombre de modo (ej. "ctf" de uno y "p_ctf" del otro conviven en la misma lista).
+async function buildLauncherServerEntry(modeKey: string): Promise<any | null> {
     const profile = PROFILES[modeKey];
-    if (!profile) return res.status(404).json({ error: 'Modo desconocido' });
-
     const name = `q3launcher-${modeKey}`;
-    let running = false;
+    let running = false, startedAt: string | undefined;
     try {
         const c = docker.getContainer(name);
         const info = await c.inspect();
         running = info.State.Running;
-    } catch (e) { /* no corre */ }
-
-    if (!running) return res.status(404).json({ error: 'Ese server no está activo' });
+        startedAt = info.State.StartedAt;
+    } catch (e) { /* no existe */ }
+    if (!running) return null;
 
     const live = await queryGameServer(profile.port);
     const launched = currentMatches[modeKey];
     const mapBsp = live?.map || launched?.bsp;
     const meta = getMapMeta(mapBsp, launched);
+    return {
+        id: modeKey, mode: modeKey, permanent: false, port: profile.port, startedAt,
+        hostname: live?.hostname || launched?.longname || modeKey.toUpperCase(),
+        map: mapBsp || '?', longname: meta.longname, levelshot: meta.levelshot,
+        players: live?.players || []
+    };
+}
+
+async function buildPermanentServerEntry(modeKey: string): Promise<any | null> {
+    const profile = PERMANENT_SERVERS[modeKey];
+    const live = await queryGameServer(profile.port);
+    if (!live) return null; // el server esta caido/no responde -- no lo listamos como si estuviera online
+
+    const mapBsp = live.map;
+    const meta = getMapMeta(mapBsp, null);
+    return {
+        id: `p_${modeKey}`, mode: modeKey, permanent: true, port: profile.port,
+        hostname: live.hostname || profile.label,
+        map: mapBsp || '?', longname: meta.longname, levelshot: meta.levelshot,
+        players: live.players || []
+    };
+}
+
+app.get('/api/servers', async (req, res) => {
+    const servers: any[] = [];
+    for (const modeKey of Object.keys(PROFILES)) {
+        const entry = await buildLauncherServerEntry(modeKey);
+        if (entry) servers.push(entry);
+    }
+    for (const modeKey of Object.keys(PERMANENT_SERVERS)) {
+        const entry = await buildPermanentServerEntry(modeKey);
+        if (entry) servers.push(entry);
+    }
+    res.json(servers);
+});
+
+// Detalle de un server puntual (para el modal al hacer click en la lista).
+// :id es "ctf" (launcher efímero) o "p_ctf" (permanente) -- ver nota arriba.
+app.get('/api/servers/:id', async (req, res) => {
+    const id = req.params.id;
+    const isPermanent = id.startsWith('p_');
+    const modeKey = isPermanent ? id.slice(2) : id;
+
+    const entry = isPermanent
+        ? await buildPermanentServerEntry(modeKey)
+        : await buildLauncherServerEntry(modeKey);
+
+    if (!entry) return res.status(404).json({ error: 'Ese server no está activo' });
+    res.json(entry);
+});
+
+// --- ROTACIÓN MANUAL (vstr chain) DE LOS SERVERS PERMANENTES ---
+// Lee cfg-maps/nextmap_<modo>.cfg (generado aparte, ver memoria del proyecto
+// "q3-launcher-architecture" -- sección "Feature planeada: nextmap unificado")
+// y devuelve el mapa actual + los que siguen en la ronda, con nombre/miniatura
+// sacados de la misma DB de mapas que ya usa este launcher.
+const NEXTMAP_VSTR_RE = /^set\s+v(\d+)\s+"map\s+(\S+)\s*;/i;
+
+function parseNextmapChain(modeKey: string): string[] {
+    if (!Q3_PATH) return [];
+    const filePath = path.join(Q3_PATH, 'cpma', 'cfg-maps', `nextmap_${modeKey}.cfg`);
+    if (!existsSync(filePath)) return [];
+    const content = readFileSync(filePath, 'utf8');
+    const entries: { idx: number; map: string }[] = [];
+    for (const line of content.split('\n')) {
+        const m = line.match(NEXTMAP_VSTR_RE);
+        if (m) entries.push({ idx: parseInt(m[1], 10), map: m[2] });
+    }
+    entries.sort((a, b) => a.idx - b.idx);
+    return entries.map(e => e.map);
+}
+
+function mapWithMeta(bsp: string) {
+    const cached = findMapByBsp(bsp);
+    return { bsp, longname: cached?.longname || bsp, levelshot: cached?.levelshot || null, type: cached?.type || null };
+}
+
+// Endpoint público de solo lectura -- pensado para que lo consuma también
+// gaming.thrallguards.com.ar más adelante (CORS abierto a propósito), no
+// solo este launcher. No requiere ni expone nada administrable.
+app.get('/api/nextmap/:mode', async (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    const modeKey = req.params.mode;
+    const profile = PERMANENT_SERVERS[modeKey];
+    if (!profile) return res.status(404).json({ error: 'Modo desconocido' });
+
+    const chain = parseNextmapChain(modeKey);
+    if (chain.length === 0) return res.status(404).json({ error: 'No hay rotación configurada para este modo' });
+
+    const live = await queryGameServer(profile.port);
+    const currentBsp = live?.map || null;
+    let currentIdx = currentBsp ? chain.findIndex(m => m.toLowerCase() === currentBsp.toLowerCase()) : -1;
+    if (currentIdx === -1) currentIdx = 0; // mapa actual no está en la lista (ej. mapa de arranque fijo) -- mostramos la ronda desde el principio igual
+
+    const upcoming: any[] = [];
+    for (let i = 1; i <= chain.length - 1 && upcoming.length < 10; i++) {
+        upcoming.push(mapWithMeta(chain[(currentIdx + i) % chain.length]));
+    }
+
     res.json({
         mode: modeKey,
-        port: profile.port,
-        hostname: live?.hostname || launched?.longname || modeKey.toUpperCase(),
-        map: mapBsp || '?',
-        longname: meta.longname,
-        levelshot: meta.levelshot,
-        players: live?.players || []
+        online: !!live,
+        current: currentBsp ? mapWithMeta(currentBsp) : null,
+        upcoming,
+        total: chain.length
     });
+});
+
+// Acción de ADMIN: salta a un mapa puntual de la ronda de un server permanente,
+// vía rcon directo (no callvote -- esto es una acción deliberada de un click de
+// admin, no algo automatizado en ráfaga, así que un "map X" instantáneo es
+// seguro -- ver la lección de esta madrugada sobre no mashear cambios de mapa).
+app.post('/api/permanent-servers/:mode/set-map', express.json(), async (req, res) => {
+    const modeKey = req.params.mode;
+    const profile = PERMANENT_SERVERS[modeKey];
+    if (!profile) return res.status(404).json({ error: 'Modo desconocido' });
+    const map = sanitize(req.body?.map, '');
+    if (!map) return res.status(400).json({ error: 'Falta "map" en el body' });
+
+    await sendRcon(profile.port, profile.rconPassword, `map ${map}`);
+    res.json({ ok: true, mode: modeKey, map });
 });
 
 // --- ESCANEO REACTIVO (no barre todo todo el tiempo) ---
@@ -802,8 +998,9 @@ function scanOnePk3(pk3Obj: { file: string; fullPath: string; loc: string }): nu
 
                     if (!mapExists(technicalName, pk3Obj.file)) {
                         const shotEntry = zip.getEntries().find(e => e.entryName.toLowerCase() === `levelshots/${technicalName}.jpg`);
+                        let levelshotFile: string | null = null;
                         if (shotEntry) {
-                            try { zip.extractEntryTo(shotEntry, PREVIEWS_PATH, false, true); } catch (e) { }
+                            try { levelshotFile = extractLevelshot(zip, shotEntry, technicalName); } catch (e) { }
                         }
                         upsertMap({
                             bsp: technicalName,
@@ -811,7 +1008,7 @@ function scanOnePk3(pk3Obj: { file: string; fullPath: string; loc: string }): nu
                             loc: pk3Obj.loc,
                             longname: longMatch ? longMatch[1] : technicalName,
                             type: typeMatch ? typeMatch[1].toLowerCase() : 'unknown',
-                            levelshot: shotEntry ? `/previews/${technicalName}.jpg` : null
+                            levelshot: levelshotFile ? `/previews/${levelshotFile}` : null
                         });
                         added++;
                     }
