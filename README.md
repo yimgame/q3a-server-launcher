@@ -9,6 +9,8 @@ Un panel de control web moderno, dinámico y automatizado para lanzar servidores
 ## ✨ Características Principales
 
 - **🎮 Gestión de Perfiles**: Lanza servidores fácilmente con modos de juego configurados (1v1, FFA, TDM, CTF, CA, Freeze Tag) y mods.
+- **🔒 Servers Permanentes + Efímeros en un Solo Panel**: Además de las instancias de prueba que lanza este launcher (puertos 28xxx), lista en vivo los 6 servers fijos de producción (FFA/1v1/2v2/TDM/CTF/CA, puertos 27960-27965) con su estado, jugadores conectados y consola en tiempo real — aunque este panel no los haya lanzado.
+- **🗺️ Rotación de Mapas con Miniaturas**: Cada server permanente tiene su propia ronda de rotación manual (chain `vstr` generado desde `cfg-maps/nextmap_<modo>.cfg`). Un modal dedicado muestra el mapa actual y los próximos en la ronda con su miniatura, con un click para saltar a cualquiera al instante. Este dato también se expone vía `GET /api/nextmap/:modo` como API pública de solo lectura (CORS abierto), pensada para poder mostrarse en otros sitios (ej. una página de estado de la comunidad) sin duplicar lógica.
 - **🌐 FastDL Integrado**: Sirve archivos `.pk3` automáticamente para que los clientes que se conectan descarguen los mods y mapas sin configuración de servidor web de terceros.
 - **🌍 Búsqueda Automática de Mapas**: Si escribes un mapa que no tienes, el servidor automáticamente intentará descargarlo en el siguiente orden:
   1. Base de datos local JSON (caché rápida).
@@ -17,7 +19,6 @@ Un panel de control web moderno, dinámico y automatizado para lanzar servidores
   4. Búsqueda y descarga inteligente desde la API de **LvLWorld**.
   5. Intercepción de descarga en espectros de servidores directos de la comunidad (ej. sst13.de).
   6. Si todo falla, mostrará un enlace directo a Google configurado para encontrar el mapa.
-  7. lista los proximos mapas por medio de cfg vstr nexmap v1 v2 v3 etc con miniatura en modal
 - **🖼️ Interfaz Web Dinámica**: Temas visuales personalizables (Dark, Ocean Animado, Retro Terminal), auto-completado de mapas con visualización de nivel (*levelshots*), y una terminal de combate o consola que muestra la actividad del servidor en vivo vía WebSockets.
 - **⚙️ Escáner en Segundo Plano**: Al iniciar, un servicio no bloqueante parsea todos tus archivos `.pk3` localizando los archivos `.arena` para extraer automáticamente los nombres técnicos, nombres completos, tipos de juego y extraer las capturas de pantalla de cada mapa para mostrárselas al usuario en la web.
 
