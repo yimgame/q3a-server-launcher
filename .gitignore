@@ -5,3 +5,4 @@ temp.zip
 .system_generated/
 *.log
 maps.db
+__pycache__/
