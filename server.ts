@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { existsSync, mkdirSync, readdirSync, copyFileSync, unlinkSync, createWriteStream, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, copyFileSync, unlinkSync, createWriteStream, readFileSync, renameSync } from 'fs';
 import AdmZip from 'adm-zip';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
@@ -136,13 +136,14 @@ const PROFILES: any = {
     'tdm': { port: 28062, mode: 3, cfg: 'yimq3a-cpma-tdm-server-gemini.cfg', mapCfg: 'tdmmaps.cfg', folder: 'launcher_tdm' },
     'ctf': { port: 28063, mode: 4, cfg: 'yimq3a-cpma-ctf-server-gemini.cfg', mapCfg: 'ctfmaps.cfg', folder: 'launcher_ctf' },
     'ca': { port: 28064, mode: 5, cfg: 'yimq3a-cpma-ca-server-gemini.cfg', mapCfg: 'camaps.cfg', folder: 'launcher_ca' },
-    'ftag': { port: 28065, mode: 6, cfg: 'yimq3a-cpma-ftag-server-gemini.cfg', mapCfg: 'ftagmaps.cfg', folder: 'launcher_ftag' },
-    'ctfs': { port: 28066, mode: 7, cfg: 'yimq3a-cpma-ctfs-server-gemini.cfg', mapCfg: 'ctfsmaps.cfg', folder: 'launcher_ctfs' },
-    'ra': { port: 28067, mode: 8, cfg: 'yimq3a-cpma-ra-server-gemini.cfg', mapCfg: 'ramaps.cfg', folder: 'launcher_ra' }
+    // ftag/ctfs/ra apuntaban a cfgs inexistentes (y ra usaba mode 8 = 2v2). Corregido 2026-10-04.
+    'ftag': { port: 28065, mode: 6, cfg: 'yimq3a-cpma-ft-server-gemini.cfg', mapCfg: 'tdmmaps.cfg', folder: 'launcher_ftag' },
+    'ctfs': { port: 28066, mode: 7, cfg: 'yimq3a-cpma-ctfs-server-gemini.cfg', mapCfg: 'ctfmaps.cfg', folder: 'launcher_ctfs' },
+    'ra': { port: 28067, mode: 5, cfg: 'yimq3a-cpma-ra3-server-gemini.cfg', mapCfg: 'ra3maps.txt', folder: 'launcher_ra' }
 };
 
-// Los 6 servers FIJOS y permanentes (stack "quake3_server" en Portainer, container_name
-// quake3_<modo>, puertos 27960-27965) -- corren siempre, no los lanza/mata este launcher,
+// Los 8 servers FIJOS y permanentes (stack "quake3_server" en Portainer, container_name
+// quake3_<modo>, puertos 27960-27967) -- corren siempre, no los lanza/mata este launcher,
 // pero sí los queremos LISTAR y poder administrarles el mapa (via rcon UDP, no via stdin
 // de Docker como con los que sí lanzamos nosotros). Cada uno tiene su propio chain de
 // rotación manual en cfg-maps/nextmap_<modo>.cfg (ver /api/nextmap/:mode más abajo).
@@ -152,7 +153,11 @@ const PERMANENT_SERVERS: any = {
     '2v2': { port: 27962, containerName: 'quake3_2v2', rconPassword: 'Megcone', label: '2v2' },
     'tdm': { port: 27963, containerName: 'quake3_tdm', rconPassword: 'Megcone', label: 'TDM' },
     'ctf': { port: 27964, containerName: 'quake3_ctf', rconPassword: 'Megcone', label: 'CTF' },
-    'ca': { port: 27965, containerName: 'quake3_clan_arena', rconPassword: 'Megcone', label: 'CA' }
+    'ca': { port: 27965, containerName: 'quake3_clan_arena', rconPassword: 'Megcone', label: 'CA' },
+    // Agregados 2026-10-04. Claves 'ft'/'ra3' (no 'ftag'/'ra', que son los perfiles a pedido de
+    // arriba) para que coincidan con cfg-maps/nextmap_ft.cfg y nextmap_ra3.cfg.
+    'ft': { port: 27966, containerName: 'quake3_freeze_tag', rconPassword: 'Megcone', label: 'Freeze Tag' },
+    'ra3': { port: 27967, containerName: 'quake3_rocket_arena', rconPassword: 'Megcone', label: 'Rocket Arena' }
 };
 
 // Info del último mapa lanzado por modo (bsp/longname/levelshot), para mostrar
@@ -278,6 +283,16 @@ function extractLevelshot(zip: AdmZip, shotEntry: any, technicalName: string): s
     return finalName;
 }
 
+// Mapas que vienen sin .arena (ej. ra3map1-20, varios de Quake Live): sin esto
+// el launcher no los ve aunque estén en baseq3. Devuelve los nombres técnicos
+// de los maps/*.bsp del pk3.
+function bspNamesInZip(zip: any): string[] {
+    return zip.getEntries()
+        .map((e: any) => e.entryName.toLowerCase())
+        .filter((n: string) => n.startsWith('maps/') && n.endsWith('.bsp') && n.split('/').length === 2)
+        .map((n: string) => n.slice(5, -4));
+}
+
 // --- ESCÁNER DE .ARENA (BUSCA NOMBRE LARGO -> NOMBRE TÉCNICO) ---
 function scanPk3ForMap(pk3Path: string, query: string): any | null {
     try {
@@ -315,6 +330,14 @@ function scanPk3ForMap(pk3Path: string, query: string): any | null {
                 }
             }
         }
+        // Plan B: pk3 sin .arena -> buscar el .bsp por nombre técnico exacto.
+        const q = query.toLowerCase().trim();
+        if (bspNamesInZip(zip).includes(q)) {
+            const shotEntry = zip.getEntries().find(e => e.entryName.toLowerCase() === `levelshots/${q}.jpg`);
+            const levelshotFile = shotEntry ? extractLevelshot(zip, shotEntry, q) : null;
+            return { bsp: q, pk3: path.basename(pk3Path), loc: 'baseq3', longname: q, type: 'unknown',
+                     levelshot: levelshotFile ? `/previews/${levelshotFile}` : null };
+        }
     } catch (e) { console.error("Error PK3:", e); }
     return null;
 }
@@ -331,13 +354,41 @@ async function checkLocalFtp(query: string): Promise<any | null> {
                 const result = scanPk3ForMap(ftpFileFull, query);
                 if (result) {
                     const destPath = path.join(BASEQ3_PATH!, file);
-                    copyFileSync(ftpFileFull, destPath);
+                    if (!existsSync(destPath)) copyFileSync(ftpFileFull, destPath); // no pisar existentes
                     return scanPk3ForMap(destPath, query);
                 }
             }
         }
     } catch (e) { console.error("Error checkLocalFtp:", e); }
     return null;
+}
+
+// Guarda una descarga en baseq3 SOLO si es un pk3 de verdad con un mapa adentro.
+// Incidente 2026-10-04: sst13.de responde 200 con una página HTML para mapas que
+// no tiene; se guardaba como <mapa>.pk3 y encima PISABA el pk3 existente (con un
+// hardlink, rompió también el original en arena/). Reglas:
+//  - se baja a un temporal y se valida (zip válido + algún maps/*.bsp)
+//  - nunca se sobrescribe un archivo que ya existe
+//  - rename atómico (inodo nuevo, no se escribe sobre enlaces)
+async function guardarPk3Seguro(stream: any, destino: string): Promise<boolean> {
+    if (existsSync(destino)) {
+        console.warn(`[Descarga] ${path.basename(destino)} ya existe, no se sobrescribe.`);
+        return false;
+    }
+    const tmp = `${destino}.descargando`;
+    await new Promise((ok, mal) => stream.pipe(createWriteStream(tmp)).on('finish', ok).on('error', mal));
+    try {
+        const cabecera = readFileSync(tmp).subarray(0, 2).toString('latin1');
+        if (cabecera !== 'PK') throw new Error('no es un zip (¿página HTML?)');
+        const zip = new AdmZip(tmp);
+        if (bspNamesInZip(zip).length === 0) throw new Error('el zip no trae ningún maps/*.bsp');
+        renameSync(tmp, destino);
+        return true;
+    } catch (e: any) {
+        console.warn(`[Descarga] ${path.basename(destino)} descartado: ${e?.message || e}`);
+        try { unlinkSync(tmp); } catch { }
+        return false;
+    }
 }
 
 // --- DESCARGA DESDE LVLWORLD ---
@@ -372,8 +423,12 @@ async function downloadFromLvL(mapName: string): Promise<any | null> {
 
         for (const e of zip.getEntries()) {
             if (e.entryName.toLowerCase().endsWith('.pk3')) {
-                const fullPath = path.join(BASEQ3_PATH!, e.entryName);
-                zip.extractEntryTo(e, BASEQ3_PATH!, false, true);
+                const fullPath = path.join(BASEQ3_PATH!, path.basename(e.entryName));
+                if (existsSync(fullPath)) {   // nunca pisar un pk3 existente
+                    console.warn(`[Descarga] ${path.basename(fullPath)} ya existe, no se sobrescribe.`);
+                    continue;
+                }
+                zip.extractEntryTo(e, BASEQ3_PATH!, false, false);
                 result = scanPk3ForMap(fullPath, query);
                 if (result) result.fuente = downloadUrl;
             }
@@ -397,7 +452,7 @@ async function downloadFromDirectUrls(mapName: string): Promise<any | null> {
                 const pk3Name = `${mapName.toLowerCase()}.pk3`;
                 const fullPath = path.join(BASEQ3_PATH!, pk3Name);
                 const resp = await axios({ url: dUrl, responseType: 'stream', headers: { 'User-Agent': 'Mozilla/5.0' } });
-                await new Promise(r => resp.data.pipe(createWriteStream(fullPath)).on('finish', r));
+                if (!(await guardarPk3Seguro(resp.data, fullPath))) continue;
 
                 const result = scanPk3ForMap(fullPath, mapName);
                 if (result) {
@@ -531,7 +586,8 @@ io.on('connection', (socket) => {
                 const srcPath = path.join(ftpPathEnv, mapInfo.pk3);
                 const destPath = path.join(BASEQ3_PATH!, mapInfo.pk3);
                 if (existsSync(srcPath)) {
-                    copyFileSync(srcPath, destPath);
+                    // No pisar: si ya está en baseq3 (puede ser un hardlink) se usa el existente.
+                    if (!existsSync(destPath)) copyFileSync(srcPath, destPath);
                     mapInfo.loc = 'baseq3';
                 }
             }
@@ -1014,6 +1070,19 @@ function scanOnePk3(pk3Obj: { file: string; fullPath: string; loc: string }): nu
                     }
                 }
             }
+        }
+        // Plan B: los .bsp que ningún .arena declaró se indexan igual (nombre
+        // largo = nombre técnico, tipo desconocido).
+        for (const technicalName of bspNamesInZip(zip)) {
+            if (mapExists(technicalName, pk3Obj.file)) continue;
+            const shotEntry = zip.getEntries().find(e => e.entryName.toLowerCase() === `levelshots/${technicalName}.jpg`);
+            let levelshotFile: string | null = null;
+            if (shotEntry) {
+                try { levelshotFile = extractLevelshot(zip, shotEntry, technicalName); } catch (e) { }
+            }
+            upsertMap({ bsp: technicalName, pk3: pk3Obj.file, loc: pk3Obj.loc, longname: technicalName,
+                        type: 'unknown', levelshot: levelshotFile ? `/previews/${levelshotFile}` : null });
+            added++;
         }
     } catch (e: any) {
         // Antes era 100% silencioso -- lo logueamos para poder detectar pk3s
